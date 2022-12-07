@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from "vue-router";
 import HelloWorld from "./components/HelloWorld.vue";
+import router from "@/router/index";
+const navList = router.getRoutes();
+
+defineExpose({
+  a: 1,
+});
 </script>
 
 <template>
@@ -17,8 +23,12 @@ import HelloWorld from "./components/HelloWorld.vue";
       <HelloWorld msg="You did it!" />
 
       <nav>
-        <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
+        <RouterLink
+          v-for="route in navList"
+          :key="route.name"
+          :to="route.path"
+          >{{ route.name }}</RouterLink
+        >
       </nav>
     </div>
   </header>
