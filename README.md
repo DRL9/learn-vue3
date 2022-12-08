@@ -535,6 +535,532 @@ export default {
 <component :is="tabs[currentTab]"></component>
 ```
 
+## 深入了解组件
+### 注册组件
+#### 全局注册
+```javascript
+import MyComponent from './App.vue'
+
+app.component('MyComponent', MyComponent)
+```
+缺点
+- 不能 tree-shaking
+- 让组件间的依赖关系不清晰
+
+#### 局部注册
+```html
+<script setup>
+import ComponentA from './ComponentA.vue'
+</script>
+
+<template>
+  <ComponentA />
+</template>
+
+```
+```javascript
+import ComponentA from './ComponentA.js'
+
+export default {
+  components: {
+    ComponentA
+  },
+  setup() {
+    // ...
+  }
+}
+```
+### Props
+#### 声明
+如果使用 ts 可以这么声明
+```typescript
+defineProps<{
+  title?: string;
+  name: string;
+  count: number;
+}>();
+```
+
+如果是 setup
+```javascript
+const props = defineProps(['foo'])
+
+console.log(props.foo)
+```
+或
+```javascript
+defineProps({
+  title: String,
+  likes: Number
+})
+```
+
+#### Props 传递
+下面两种方式命名都可以
+```html
+<BlogPost is-published firstName="d" />
+```
+#### 单一数据流
+如果只希望 props 作为初始值， 不响应后续值的变更
+```javascript
+const props = defineProps(['initialCounter'])
+
+// counter only uses props.initialCounter as the initial value;
+// it is disconnected from future prop updates.
+const counter = ref(props.initialCounter)
+```
+如果希望 转换 props
+```javascript
+const props = defineProps(['size'])
+
+// computed property that auto-updates when the prop changes
+const normalizedSize = computed(() => props.size.trim().toLowerCase())
+```
+#### 校验
+```javascript
+defineProps({
+  // Basic type check
+  //  (`null` and `undefined` values will allow any type)
+  propA: Number,
+  // Multiple possible types
+  propB: [String, Number],
+  // Required string
+  propC: {
+    type: String,
+    required: true
+  },
+  // Number with a default value
+  propD: {
+    type: Number,
+    default: 100
+  },
+  // Object with a default value
+  propE: {
+    type: Object,
+    // Object or array defaults must be returned from
+    // a factory function. The function receives the raw
+    // props received by the component as the argument.
+    default(rawProps) {
+      return { message: 'hello' }
+    }
+  },
+  // Custom validator function
+  propF: {
+    validator(value) {
+      // The value must match one of these strings
+      return ['success', 'warning', 'danger'].includes(value)
+    }
+  },
+  // Function with a default value
+  propG: {
+    type: Function,
+    // Unlike object or array default, this is not a factory function - this is a function to serve as a default value
+    default() {
+      return 'Default function'
+    }
+  }
+})
+```
+- defineProps 里面的参数， 不能访问外部的变量
+- 如果 type 是自定义 class, 那么会使用 instanceof
+- 对于 boolean, 如果没有传递那么会映射成 false
+
+对于 ts ，可以通过下面方式提供默认值
+```typescript
+const props = withDefaults(
+  defineProps<{
+    title?: string;
+    name: string;
+    count: number;
+    firstName: string;
+    isValid?: boolean;
+  }>(),
+  {
+    title: "default title",
+  }
+);
+```
+
+### 事件
+在 template 中 emit
+```html
+<!-- MyComponent -->
+<button @click="$emit('someEvent',1,2,3)">click me</button>
+```
+在 script 中 emit
+```javascript
+const emit = defineEmits(['inFocus', 'submit'])
+function buttonClick() {
+  emit('submit')
+}
+```
+或
+```javascript
+export default {
+  emits: ['inFocus', 'submit'],
+  setup(props, ctx) {
+    ctx.emit('submit')
+  }
+}
+```
+对于 ts
+```typescript
+const emit = defineEmits<{
+  (e: 'change', id: number): void
+  (e: 'update', value: string): void
+}>()
+```
+- 自定义事件不会冒泡
+- 如果自定义事件与原生事件同名，那么会覆盖原生事件
+
+在 js 中验证事件
+```javascript
+const emit = defineEmits({
+  // No validation
+  click: null,
+
+  // Validate submit event
+  submit: ({ email, password }) => {
+    if (email && password) {
+      return true
+    } else {
+      console.warn('Invalid submit event payload!')
+      return false
+    }
+  }
+})
+
+function submitForm(email, password) {
+  emit('submit', { email, password })
+}
+```
+
+#### v-model
+v-model 是如下的简写
+```html
+<CustomInput
+  :modelValue="searchText"
+  @update:modelValue="newValue => searchText = newValue"
+/>
+```
+
+组件按照如下写
+```html
+<script setup lang="ts">
+defineProps<{
+  modelValue: string;
+}>();
+
+defineEmits<{
+  (e: "update:modelValue", v: string): void;
+}>();
+</script>
+
+<template>
+  <input
+    :value="modelValue"
+    @input="$emit('update:modelValue', ($event.target as any)?.value)"
+  />
+</template>
+```
+
+也可以使用可写的 computed 实现
+```html
+<!-- CustomInput.vue -->
+<script setup>
+import { computed } from 'vue'
+
+const props = defineProps(['modelValue'])
+const emit = defineEmits(['update:modelValue'])
+
+const value = computed({
+  get() {
+    return props.modelValue
+  },
+  set(value) {
+    emit('update:modelValue', value)
+  }
+})
+</script>
+
+<template>
+  <input v-model="value" />
+</template>
+```
+
+多个 v-model
+```javascript
+defineProps({
+  firstName: String,
+  lastName: String
+})
+
+defineEmits(['update:firstName', 'update:lastName'])
+```
+
+```html
+<UserName
+  v-model:first-name="first"
+  v-model:last-name="last"
+/>
+```
+
+修饰符， 相当于是定义一个 props, 命名规则为 `prop + 'Modifiers'`
+```typescript
+const props = defineProps<{
+  modelValue: string;
+  suffix: string;
+  suffixModifiers?: { uppercase: boolean };
+}>();
+const suffixValue = computed({
+  get() {
+    return props.suffix;
+  },
+  set(v) {
+    console.log(props.suffixModifiers);
+    emit(
+      "update:suffix",
+      props.suffixModifiers?.uppercase ? v.toUpperCase() : v
+    );
+  },
+});
+```
+
+### 属性
+#### 属性继承
+如果组件只有一个根元素， 下列属性会直接由 *根元素* 继承, 如果根元素存在对应属性，那么会合并
+- class
+- v-on
+- style
+
+> 如果根元素是自定义组件， 那么该规则会传递下去
+
+禁用属性继承
+```html
+<script>
+// use normal <script> to declare options
+export default {
+  inheritAttrs: false
+}
+</script>
+
+<script setup>
+// ...setup logic
+</script>
+```
+
+- 当属性不是运用在 根元素， 而是其他元素时， 一般都需要禁用 属性继承
+- 可以通过 `$attrs` 获得所有属性
+- 对于 `v-on` ，可以通过 `$attrs.onClick` 类似的模式获取
+
+例如一个自定义按钮
+```html
+<div class="btn-wrapper">
+  <button class="btn" v-bind="$attrs">click me</button>
+</div>
+```
+
+> 如果有多个根元素， 需要指定 `$attrs` 运用在哪个元素上
+
+在js中访问 attrs
+```html
+<script setup>
+import { useAttrs } from 'vue'
+
+const attrs = useAttrs()
+</script>
+```
+> `$attrs` 不是响应式的
+
+### 插槽
+```html
+<button class="fancy-btn">
+  <slot></slot> <!-- slot outlet -->
+</button>
+```
+内容默认值
+```html
+<button type="submit">
+  <slot>
+    Submit <!-- fallback content -->
+  </slot>
+</button>
+```
+
+多个插槽
+```html
+<div class="container">
+  <header>
+    <slot name="header"></slot>
+  </header>
+  <main>
+    <slot></slot>
+  </main>
+  <footer>
+    <slot name="footer"></slot>
+  </footer>
+</div>
+```
+`v-slot:slotName` 或 `#slotName`
+```html
+<BaseLayout>
+  <template v-slot:header>
+    <h1>Here might be a page title</h1>
+  </template>
+
+  <template #default>
+    <p>A paragraph for the main content.</p>
+    <p>And another one.</p>
+  </template>
+
+  <template #footer>
+    <p>Here's some contact info</p>
+  </template>
+</BaseLayout>
+```
+没有指定 slotName 的， 会自动合并到 default
+```html
+<BaseLayout>
+  <template v-slot:header>
+    <h1>Here might be a page title</h1>
+  </template>
+    <p>A paragraph for the main content.</p>
+    <p>And another one.</p>
+  <template #footer>
+    <p>Here's some contact info</p>
+  </template>
+</BaseLayout>
+```
+动态 插槽名
+```html
+<base-layout>
+  <template v-slot:[dynamicSlotName]>
+    ...
+  </template>
+
+  <!-- with shorthand -->
+  <template #[dynamicSlotName]>
+    ...
+  </template>
+</base-layout>
+```
+
+组件传递数据给插槽
+```html
+<template>
+  <slot name="header" message="hello"></slot>
+  <slot :count="1"></slot>
+</template>
+```
+```html
+<MyComponent v-slot="{ text, count }">
+  {{ text }} {{ count }}
+</MyComponent>
+```
+
+当混合默认插槽和命名插槽时，用 template 包裹默认插槽
+```html
+<MyComponent>
+  <template #header="headerProps">
+    {{ headerProps.message }}
+  </template>
+
+  <template #default="defaultProps">
+    {{ defaultProps.count }}
+  </template>
+</MyComponent>
+```
+数据传递一般运用于 组件既需要处理数据逻辑有需要处理呈现样式的情况
+
+
+### Provide / inject
+用来深层传递数据
+```javascript
+import { ref, provide } from 'vue'
+
+const count = ref(0)
+provide('message', count)
+
+```
+
+```javascript
+import { inject } from 'vue'
+
+const message = inject('message')
+// 设置默认值
+const m = inject('message', ()=>defaultValue)
+const m1 = inject('message', defaultValue)
+```
+
+把 value 设置成只读
+```javascript
+import { ref, provide, readonly } from 'vue'
+
+const count = ref(0)
+provide('read-only-count', readonly(count))
+```
+
+为了减少冲突，使用 symbol 作为 key
+```javascript
+// keys.js
+export const myInjectionKey = Symbol()
+
+// in provider component
+import { provide } from 'vue'
+import { myInjectionKey } from './keys.js'
+
+provide(myInjectionKey, {
+  /* data to provide */
+})
+
+// in injector component
+import { inject } from 'vue'
+import { myInjectionKey } from './keys.js'
+
+const injected = inject(myInjectionKey)
+```
+
+app 级别的 provide
+```javascript
+app.provide('key','value')
+```
+
+### 异步组件
+```html
+<script setup>
+import { defineAsyncComponent } from 'vue'
+
+const AdminPage = defineAsyncComponent(() =>
+  import('./components/AdminPageComponent.vue')
+)
+</script>
+
+<template>
+  <AdminPage />
+</template>
+```
+
+高级选项
+```javascript
+const AsyncComp = defineAsyncComponent({
+  // the loader function
+  loader: () => import('./Foo.vue'),
+
+  // A component to use while the async component is loading
+  loadingComponent: LoadingComponent,
+  // Delay before showing the loading component. Default: 200ms.
+  delay: 200,
+
+  // A component to use if the load fails
+  errorComponent: ErrorComponent,
+  // The error component will be displayed if a timeout is
+  // provided and exceeded. Default: Infinity.
+  timeout: 3000
+})
+```
+
+## 复用性
+
 
 
 ## Project Setup

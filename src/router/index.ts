@@ -22,6 +22,11 @@ const router = createRouter({
       name: "essentials",
       component: () => import("../views/EssentialsView.vue"),
     },
+    {
+      path: "/comInDepth",
+      name: "comInDepth",
+      component: () => import("../views/ComponentInDepth.vue"),
+    },
   ],
 });
 
