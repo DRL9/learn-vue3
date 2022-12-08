@@ -1060,7 +1060,217 @@ const AsyncComp = defineAsyncComponent({
 ```
 
 ## 复用性
+### 组合
+> 组合API 一般来用复用状态逻辑
 
+一般实例
+```javascript
+// event.js
+import { onMounted, onUnmounted } from 'vue'
+
+export function useEventListener(target, event, callback) {
+  // if you want, you can also make this
+  // support selector strings as target
+  onMounted(() => target.addEventListener(event, callback))
+  onUnmounted(() => target.removeEventListener(event, callback))
+}
+
+// mouse.js
+import { ref } from 'vue'
+import { useEventListener } from './event'
+
+export function useMouse() {
+  const x = ref(0)
+  const y = ref(0)
+
+  useEventListener(window, 'mousemove', (event) => {
+    x.value = event.pageX
+    y.value = event.pageY
+  })
+
+  return { x, y }
+}
+```
+```html
+<script setup>
+import { useMouse } from './mouse.js'
+
+const { x, y } = useMouse()
+</script>
+
+<template>Mouse position is at: {{ x }}, {{ y }}</template>
+```
+
+数据拉取
+```javascript
+// fetch.js
+import { ref, isRef, unref, watchEffect } from 'vue'
+
+export function useFetch(url) {
+  const data = ref(null)
+  const error = ref(null)
+
+  function doFetch() {
+    // reset state before fetching..
+    data.value = null
+    error.value = null
+    // unref() unwraps potential refs
+    fetch(unref(url))
+      .then((res) => res.json())
+      .then((json) => (data.value = json))
+      .catch((err) => (error.value = err))
+  }
+
+  if (isRef(url)) {
+    // setup reactive re-fetch if input URL is a ref
+    watchEffect(doFetch)
+  } else {
+    // otherwise, just fetch once
+    // and avoid the overhead of a watcher
+    doFetch()
+  }
+
+  return { data, error }
+}
+```
+
+#### 约定
+对于输入值，如果需要 响应变更， 可以加上 `watch` 或 `watchEffect`
+```javascript
+import { unref } from 'vue'
+
+function useFeature(maybeRef) {
+  // if maybeRef is indeed a ref, its .value will be returned
+  // otherwise, maybeRef is returned as-is
+  const value = unref(maybeRef)
+}
+```
+
+- 使用 `ref` 而不是 `reactive` ，这样子解构赋值时， 就不会丢失响应性
+- 使用同步方法， 这样子可以保证生命周期 hook 正确调用， 且自动 销毁 watch
+
+### 自定义指令
+> 主要用来复用 涉及 底层 DOM 访问的逻辑
+
+- 指令通过一个包含定义生命周期hooks 的对象来定义
+- setup 中 `v` 开头的变量会被认为是 自定义指令
+
+```html
+<script setup>
+// enables v-focus in templates
+const vFocus = {
+  mounted: (el) => el.focus()
+}
+</script>
+
+<template>
+  <input v-focus />
+</template>
+```
+
+在其他地方
+```javascript
+export default {
+  setup() {
+    /*...*/
+  },
+  directives: {
+    // enables v-focus in template
+    focus: {
+      /* ... */
+    }
+  }
+}
+```
+全局指令
+```javascript
+const app = createApp({})
+
+// make v-focus usable in all components
+app.directive('focus', {
+  /* ... */
+})
+```
+hooks 列表
+```javascript
+const myDirective = {
+  // called before bound element's attributes
+  // or event listeners are applied
+  created(el, binding, vnode, prevVnode) {
+    // see below for details on arguments
+  },
+  // called right before the element is inserted into the DOM.
+  beforeMount(el, binding, vnode, prevVnode) {},
+  // called when the bound element's parent component
+  // and all its children are mounted.
+  mounted(el, binding, vnode, prevVnode) {},
+  // called before the parent component is updated
+  beforeUpdate(el, binding, vnode, prevVnode) {},
+  // called after the parent component and
+  // all of its children have updated
+  updated(el, binding, vnode, prevVnode) {},
+  // called before the parent component is unmounted
+  beforeUnmount(el, binding, vnode, prevVnode) {},
+  // called when the parent component is unmounted
+  unmounted(el, binding, vnode, prevVnode) {}
+}
+```
+
+参数说明
+`binding`
+- arg
+- modifiers
+- value
+- oldValue
+- instance
+- dir 指令对象本身
+```html
+<div v-example:foo.bar="baz">
+```
+```javascript
+{
+  arg: 'foo',
+  modifiers: { bar: true },
+  value: /* value of `baz` */,
+  oldValue: /* value of `baz` from previous update */
+}
+```
+
+> 当指令运用在自定义组件时， 会自动传递到 根节点， 如果有多个根节点，那么会抛出警告
+> 通常不建议将自定义指令运用在组件上
+
+### 插件
+作用
+- 注册全局指令和组件
+- 全局的 app.provide
+- 添加全局的属性和方法
+
+示例
+```typescript
+import type { Plugin } from "vue";
+
+const $translate = (opts: any) => (key: string) => {
+  return key.split(".").reduce((o, k) => {
+    if (o) return o[k];
+    return o;
+  }, opts);
+};
+
+export const translatePlugin: Plugin = {
+  install(app, opts) {
+    app.config.globalProperties.$translate = $translate(opts);
+    app.provide("version", "1.1");
+  },
+};
+
+// work in vue3
+declare module "@vue/runtime-core" {
+  export interface ComponentCustomProperties {
+    $translate: ReturnType<typeof $translate>;
+  }
+}
+
+```
 
 
 ## Project Setup

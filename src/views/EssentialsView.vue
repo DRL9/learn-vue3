@@ -10,6 +10,7 @@ const obj = {
   },
 };
 
+// 丢失响应性
 let { count } = reactive({ count: 0 });
 function addCount() {
   count++;

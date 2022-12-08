@@ -27,6 +27,11 @@ const router = createRouter({
       name: "comInDepth",
       component: () => import("../views/ComponentInDepth.vue"),
     },
+    {
+      path: "/reusable",
+      name: "reusable",
+      component: () => import("../views/ReusableView.vue"),
+    },
   ],
 });
 
