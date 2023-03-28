@@ -3,8 +3,8 @@ import { getCurrentInstance, onMounted, onUnmounted, useSlots } from "vue";
 import type { Table } from "./store";
 
 type TableColumnProps1 = {
-  prop: string;
-  label: string;
+  prop?: string;
+  label?: string;
 };
 let idSeed = 1;
 

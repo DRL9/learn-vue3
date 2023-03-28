@@ -6,7 +6,10 @@ export default defineComponent({
     const col: TableColumnCtx = this.$props.col;
     const row = this.$props.row;
     if (col.slots.default) {
-      return renderSlot(col.slots, "default", { col, row });
+      return h("div", { class: "cell" }, [
+        renderSlot(col.slots, "default", { col, row }),
+        renderSlot(col.slots, "append", { col, row }),
+      ]);
     }
     return h("div", row[col.prop]);
   },
