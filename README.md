@@ -945,7 +945,7 @@ const attrs = useAttrs()
 </base-layout>
 ```
 
-组件传递数据给插槽
+获取插槽 scope 数据
 ```html
 <template>
   <slot name="header" message="hello"></slot>
